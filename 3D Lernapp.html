@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D Lernpunkte-App</title>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.92);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --green: #22c55e;
+      --green-soft: rgba(34,197,94,.24);
+      --red: #ef4444;
+      --border: rgba(255,255,255,0.14);
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    #scene {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    #hotspotLayer {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .topbar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .titlebox {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 10px 13px;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+      width: min(470px, 48vw);
+    }
+
+    .titlebox h1 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.1;
+      font-weight: 850;
+    }
+
+    .titlebox p {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.25;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+      max-width: 52vw;
+    }
+
+    button, .fileButton {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(15,23,42,.84);
+      color: white;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0,0,0,.18);
+      user-select: none;
+    }
+
+    button:active, .fileButton:active { transform: translateY(1px); }
+    button.green { background: var(--green); color: #052e16; }
+    button.red { background: var(--red); color: white; }
+    input[type="file"] { display: none; }
+
+    .statusBox {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 15;
+      width: min(540px, calc(100vw - 24px));
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 10px 12px;
+      color: #dbeafe;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .statusBox strong { color: white; }
+    .statusBox small { color: var(--muted); }
+
+    .progress {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      color: #cbd5e1;
+      flex-wrap: wrap;
+    }
+
+    .dotProgress {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: #64748b;
+      display: inline-block;
+    }
+
+    .dotProgress.done {
+      background: var(--green);
+      box-shadow: 0 0 10px rgba(34,197,94,.9);
+    }
+
+    .toast {
+      position: absolute;
+      top: 86px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      display: none;
+      max-width: calc(100vw - 24px);
+      background: rgba(15,23,42,.96);
+      color: white;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+      padding: 10px 14px;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .toast.show { display: block; }
+
+    .hotspotWrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      overflow: visible;
+      z-index: 1;
+    }
+
+    .hotspotPoint {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 13px;
+      height: 13px;
+      border-radius: 999px;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(255,255,255,.9);
+      box-shadow:
+        0 0 10px rgba(255,255,255,.95),
+        0 0 22px rgba(255,255,255,.55),
+        0 0 40px rgba(20,184,166,.28);
+      cursor: pointer;
+      transition: background .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    .hotspotPoint::before,
+    .hotspotPoint::after {
+      content: "";
+      position: absolute;
+      inset: -9px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.78);
+      animation: pulseWhite 1.7s ease-out infinite;
+      pointer-events: none;
+    }
+
+    .hotspotPoint::after {
+      animation-delay: .55s;
+      opacity: .55;
+    }
+
+    .hotspotWrap:hover .hotspotPoint,
+    .hotspotWrap.active .hotspotPoint,
+    .hotspotWrap:focus-within .hotspotPoint {
+      transform: translate(-50%, -50%) scale(1.18);
+    }
+
+    .hotspotWrap.correct .hotspotPoint {
+      background: var(--green);
+      border-color: rgba(187,247,208,.98);
+      box-shadow:
+        0 0 12px rgba(34,197,94,.95),
+        0 0 28px rgba(34,197,94,.72),
+        0 0 50px rgba(20,184,166,.42);
+    }
+
+    .hotspotWrap.correct .hotspotPoint::before,
+    .hotspotWrap.correct .hotspotPoint::after {
+      border-color: rgba(34,197,94,.8);
+      animation-name: pulseGreen;
+    }
+
+    .hotspotWrap.wrongFlash .hotspotPoint {
+      background: var(--red);
+      box-shadow: 0 0 18px rgba(239,68,68,.9), 0 0 34px rgba(239,68,68,.5);
+    }
+
+    @keyframes pulseWhite {
+      0% { transform: scale(.35); opacity: .85; }
+      100% { transform: scale(1.65); opacity: 0; }
+    }
+
+    @keyframes pulseGreen {
+      0% { transform: scale(.35); opacity: .72; }
+      100% { transform: scale(1.85); opacity: 0; }
+    }
+
+    .answerBubble {
+      position: absolute;
+      left: 26px;
+      top: 50%;
+      width: 172px;
+      transform: translateY(-50%) translateX(-4px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      padding: 8px;
+      border-radius: 13px;
+      background: rgba(229,231,235,.96);
+      border: 1px solid rgba(148,163,184,.55);
+      color: #111827;
+      box-shadow: 0 14px 34px rgba(0,0,0,.28);
+      transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+    }
+
+    .hotspotWrap:hover .answerBubble,
+    .hotspotWrap.active .answerBubble,
+    .hotspotWrap:focus-within .answerBubble {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(-50%) translateX(0);
+    }
+
+    .hotspotWrap.correct .answerBubble {
+      background: rgba(220,252,231,.96);
+      border-color: rgba(34,197,94,.65);
+      box-shadow: 0 0 0 3px var(--green-soft), 0 14px 34px rgba(0,0,0,.28);
+    }
+
+    .bubbleTitle {
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 6px;
+      color: #374151;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hotspotWrap.correct .bubbleTitle { color: #052e16; }
+
+    .answerInput {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(107,114,128,.42);
+      border-radius: 9px;
+      padding: 8px 9px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 760;
+      color: #111827;
+      background: rgba(255,255,255,.96);
+      outline: none;
+    }
+
+    .answerInput:focus {
+      border-color: rgba(20,184,166,.95);
+      box-shadow: 0 0 0 3px rgba(20,184,166,.18);
+    }
+
+    .solutionDisplay {
+      display: none;
+      width: 100%;
+      border-radius: 9px;
+      padding: 8px 9px;
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(34,197,94,.45);
+      color: #052e16;
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.25;
+    }
+
+    #app.showSolutions .hotspotWrap .answerBubble {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(-50%) translateX(0);
+      background: rgba(220,252,231,.96);
+      border-color: rgba(34,197,94,.65);
+      box-shadow: 0 0 0 3px var(--green-soft), 0 14px 34px rgba(0,0,0,.28);
+    }
+
+    #app.showSolutions .hotspotWrap .answerInput {
+      display: none;
+    }
+
+    #app.showSolutions .hotspotWrap .solutionDisplay {
+      display: block;
+    }
+
+    #app.showSolutions .hotspotWrap .hotspotPoint {
+      background: var(--green);
+      border-color: rgba(187,247,208,.98);
+      box-shadow:
+        0 0 12px rgba(34,197,94,.95),
+        0 0 28px rgba(34,197,94,.72),
+        0 0 50px rgba(20,184,166,.42);
+    }
+
+    #app.showSolutions .hotspotWrap .hotspotPoint::before,
+    #app.showSolutions .hotspotWrap .hotspotPoint::after {
+      border-color: rgba(34,197,94,.8);
+      animation-name: pulseGreen;
+    }
+
+    button.solutionActive {
+      background: var(--green);
+      color: #052e16;
+    }
+
+    .hotspotWrap.correct .answerInput {
+      background: rgba(255,255,255,.78);
+      border-color: rgba(21,128,61,.55);
+      color: #052e16;
+    }
+
+    .testPanel {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 15;
+      background: rgba(15,23,42,.86);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #cbd5e1;
+      display: none;
+      max-width: min(360px, calc(100vw - 24px));
+    }
+
+    .testPanel.show { display: block; }
+    .testPanel strong { color: white; }
+
+    .settingsPanel {
+      position: absolute;
+      top: 86px;
+      right: 12px;
+      z-index: 24;
+      width: min(310px, calc(100vw - 24px));
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 12px;
+      display: none;
+      color: white;
+    }
+
+    .settingsPanel.open { display: block; }
+
+    .settingsPanel h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .settingsPanel label {
+      display: block;
+      margin: 10px 0 6px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .backgroundOptions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .backgroundOptions button {
+      padding: 9px 10px;
+      font-size: 12px;
+      text-align: left;
+      box-shadow: none;
+    }
+
+    .backgroundOptions button.activeBg {
+      outline: 2px solid rgba(34,197,94,.9);
+      outline-offset: 2px;
+    }
+
+    .colorRow {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .colorRow input[type="color"] {
+      width: 48px;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: transparent;
+      padding: 2px;
+      cursor: pointer;
+    }
+
+    .colorRow button {
+      flex: 1;
+      box-shadow: none;
+    }
+
+    .settingsNote {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    @media (max-width: 820px) {
+      .titlebox { max-width: 48vw; width: 48vw; }
+      .titlebox p { display: none; }
+      .actions { max-width: 50vw; gap: 6px; }
+      button, .fileButton { font-size: 12px; padding: 9px 9px; }
+      .statusBox { display: none; }
+      .answerBubble { width: min(158px, 44vw); left: 24px; }
+      .bubbleTitle { font-size: 10px; }
+      .answerInput { font-size: 12px; padding: 7px; }
+      .testPanel { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+    <div id="hotspotLayer"></div>
+
+    <div class="topbar">
+      <div class="titlebox">
+        <h1 id="projectTitle">3D Lernpunkte-App</h1>
+        <p>Projekt-ZIP laden. Das ZIP enthält hotspots.json und ein OBJ-, GLTF- oder GLB-Modell.</p>
+      </div>
+      <div class="actions">
+        <label class="fileButton" for="projectZipInput">Projekt-ZIP laden</label>
+        <input id="projectZipInput" type="file" accept=".zip" />
+        <button id="checkBtn" class="green">Kontrollieren</button>
+        <button id="resetBtn" class="red">Zurücksetzen</button>
+        <button id="viewBtn">Ansicht</button>
+        <button id="settingsBtn">Einstellungen</button>
+        <button id="solutionsBtn">Lösungen anzeigen</button>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <div id="testPanel" class="testPanel"></div>
+
+    <div id="settingsPanel" class="settingsPanel">
+      <h2>Einstellungen</h2>
+      <label>Hintergrund</label>
+      <div class="backgroundOptions">
+        <button type="button" data-bg="#101827">Dunkel</button>
+        <button type="button" data-bg="#f8fafc">Hell</button>
+        <button type="button" data-bg="#0f766e">Türkis</button>
+        <button type="button" data-bg="#312e81">Violett</button>
+        <button type="button" data-bg="#1e293b">Schiefer</button>
+        <button type="button" data-bg="#ffffff">Weiss</button>
+      </div>
+      <label for="customBgColor">Eigene Farbe</label>
+      <div class="colorRow">
+        <input id="customBgColor" type="color" value="#101827" />
+        <button id="applyCustomBgBtn" type="button">Farbe anwenden</button>
+      </div>
+      <p class="settingsNote">Der Hintergrund wird nur in dieser Ansicht geändert. Modell und Projekt-ZIP bleiben unverändert.</p>
+    </div>
+
+    <div class="statusBox">
+      <strong>Aufgabe:</strong> Fahren Sie mit der Maus über einen leuchtenden Punkt. Das Antwortfeld erscheint rechts davon. Richtige Punkte leuchten grün, falsche Antworten werden gelöscht.<br />
+      <span id="progressText" class="progress"></span><br />
+      <small id="statusSmall">Noch kein Projekt geladen. Bitte ein Projekt-ZIP auswählen.</small>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+    import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
+    import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
+
+    let HOTSPOTS = [];
+
+    const canvas = document.getElementById("scene");
+    const hotspotLayer = document.getElementById("hotspotLayer");
+    const projectZipInput = document.getElementById("projectZipInput");
+    const checkBtn = document.getElementById("checkBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const viewBtn = document.getElementById("viewBtn");
+    const settingsBtn = document.getElementById("settingsBtn");
+    const solutionsBtn = document.getElementById("solutionsBtn");
+    const settingsPanel = document.getElementById("settingsPanel");
+    const customBgColor = document.getElementById("customBgColor");
+    const applyCustomBgBtn = document.getElementById("applyCustomBgBtn");
+    const backgroundButtons = [...document.querySelectorAll("[data-bg]")];
+    const toast = document.getElementById("toast");
+    const progressText = document.getElementById("progressText");
+    const testPanel = document.getElementById("testPanel");
+    const projectTitle = document.getElementById("projectTitle");
+    const statusSmall = document.getElementById("statusSmall");
+
+    const scene = new THREE.Scene();
+    setBackgroundColor("#101827");
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.01, 1000);
+    camera.position.set(3.2, 2.6, 4.4);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, 0);
+    controls.minDistance = 1;
+    controls.maxDistance = 30;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 2.0));
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    dirLight.position.set(4, 7, 5);
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    fillLight.position.set(-5, 3, -4);
+    scene.add(fillLight);
+
+    const grid = new THREE.GridHelper(8, 8, 0x334155, 0x1e293b);
+    grid.position.y = -1.02;
+    scene.add(grid);
+
+    let currentModel = null;
+    let hotspotElements = new Map();
+    let answers = new Map();
+    let solved = new Set();
+    let hideTimers = new Map();
+    let activeObjectUrls = [];
+    let showSolutionsMode = false;
+
+    function createPlaceholderCube() {
+      const group = new THREE.Group();
+      group.name = "Platzhalter-Würfel";
+
+      const geometry = new THREE.BoxGeometry(2, 2, 2);
+      const materials = [
+        new THREE.MeshStandardMaterial({ color: 0x14b8a6, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xa78bfa, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xfb7185, roughness: 0.55, metalness: 0.05 })
+      ];
+      const cube = new THREE.Mesh(geometry, materials);
+      group.add(cube);
+
+      const edges = new THREE.EdgesGeometry(geometry);
+      const edgeLines = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 })
+      );
+      group.add(edgeLines);
+      return group;
+    }
+
+    function setModel(model) {
+      if (currentModel) scene.remove(currentModel);
+      currentModel = model;
+      scene.add(currentModel);
+      normalizeModel(currentModel);
+      fitCameraToObject(currentModel);
+      resetAnswers(false);
+    }
+
+    function normalizeModel(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      object.position.sub(center);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim > 0) object.scale.setScalar(2.6 / maxDim);
+
+      object.traverse((child) => {
+        if (child.isMesh && child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m) => {
+            if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+            m.needsUpdate = true;
+          });
+        }
+      });
+    }
+
+    function fitCameraToObject(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      const maxDim = Math.max(size.x, size.y, size.z, 1);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+      cameraZ *= 1.8;
+
+      camera.position.set(center.x + cameraZ * 0.8, center.y + cameraZ * 0.55, center.z + cameraZ);
+      camera.near = Math.max(0.01, cameraZ / 100);
+      camera.far = cameraZ * 100;
+      camera.updateProjectionMatrix();
+      controls.target.copy(center);
+      controls.update();
+    }
+
+    function createHotspotElements() {
+      hotspotLayer.innerHTML = "";
+      hotspotElements.clear();
+      hideTimers.forEach((timer) => clearTimeout(timer));
+      hideTimers.clear();
+
+      HOTSPOTS.forEach((hotspot) => {
+        const wrap = document.createElement("div");
+        wrap.className = "hotspotWrap";
+        wrap.dataset.id = hotspot.id;
+        wrap.tabIndex = 0;
+
+        const point = document.createElement("div");
+        point.className = "hotspotPoint";
+        point.title = hotspot.title || "Punkt";
+
+        const bubble = document.createElement("div");
+        bubble.className = "answerBubble";
+
+        const title = document.createElement("div");
+        title.className = "bubbleTitle";
+        title.textContent = hotspot.title || "Punkt";
+
+        const input = document.createElement("input");
+        input.className = "answerInput";
+        input.type = "text";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.placeholder = "Lösung";
+        input.value = answers.get(hotspot.id) || "";
+
+        const solutionDisplay = document.createElement("div");
+        solutionDisplay.className = "solutionDisplay";
+        solutionDisplay.textContent = getPrimarySolution(hotspot);
+
+        bubble.appendChild(title);
+        bubble.appendChild(input);
+        bubble.appendChild(solutionDisplay);
+        wrap.appendChild(point);
+        wrap.appendChild(bubble);
+        hotspotLayer.appendChild(wrap);
+
+        const show = () => showBubble(hotspot.id);
+        const delayedHide = () => scheduleHideBubble(hotspot.id, 1000);
+
+        wrap.addEventListener("mouseenter", show);
+        wrap.addEventListener("mouseleave", delayedHide);
+        wrap.addEventListener("focusin", show);
+        wrap.addEventListener("focusout", delayedHide);
+        wrap.addEventListener("click", (event) => {
+          event.stopPropagation();
+          wrap.classList.add("active");
+          if (event.target === point || event.target === wrap) input.focus();
+        });
+
+        input.addEventListener("input", () => {
+          if (!solved.has(hotspot.id)) answers.set(hotspot.id, input.value);
+        });
+
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            checkSingleAnswer(hotspot.id);
+          }
+        });
+
+        hotspotElements.set(hotspot.id, { wrap, point, bubble, input, title, solutionDisplay });
+      });
+      updateProgress();
+    }
+
+    function getPrimarySolution(hotspot) {
+      const solutions = Array.isArray(hotspot.solutions) ? hotspot.solutions : [hotspot.solution];
+      return solutions.find((solution) => String(solution || "").trim()) || "Keine Lösung hinterlegt";
+    }
+
+    function showBubble(id) {
+      const elements = hotspotElements.get(id);
+      if (!elements) return;
+      const timer = hideTimers.get(id);
+      if (timer) clearTimeout(timer);
+      hideTimers.delete(id);
+      elements.wrap.classList.add("active");
+    }
+
+    function scheduleHideBubble(id, delay = 1000) {
+      const elements = hotspotElements.get(id);
+      if (!elements) return;
+      const oldTimer = hideTimers.get(id);
+      if (oldTimer) clearTimeout(oldTimer);
+      const timer = setTimeout(() => {
+        if (elements.wrap.matches(":hover") || elements.wrap.matches(":focus-within")) return;
+        elements.wrap.classList.remove("active");
+        hideTimers.delete(id);
+      }, delay);
+      hideTimers.set(id, timer);
+    }
+
+    function normalizeText(value) {
+      return String(value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/ß/g, "ss")
+        .replace(/[^a-z0-9äöü\s-]/gi, "")
+        .replace(/\s+/g, " ");
+    }
+
+    function isCorrect(hotspot, value) {
+      const answer = normalizeText(value);
+      if (!answer) return false;
+      const solutions = Array.isArray(hotspot.solutions) ? hotspot.solutions : [hotspot.solution];
+      return solutions.some((solution) => normalizeText(solution) === answer);
+    }
+
+    function checkSingleAnswer(id) {
+      const hotspot = HOTSPOTS.find((h) => h.id === id);
+      const elements = hotspotElements.get(id);
+      if (!hotspot || !elements || solved.has(id)) return false;
+
+      const value = elements.input.value;
+      if (isCorrect(hotspot, value)) {
+        solved.add(id);
+        answers.set(id, value);
+        elements.wrap.classList.add("correct");
+        elements.wrap.classList.remove("wrongFlash");
+        elements.input.disabled = true;
+        showBubble(id);
+        scheduleHideBubble(id, 1000);
+        updateProgress();
+        return true;
+      }
+
+      elements.input.value = "";
+      answers.set(id, "");
+      elements.wrap.classList.remove("correct");
+      elements.wrap.classList.add("wrongFlash");
+      showBubble(id);
+      setTimeout(() => elements.wrap.classList.remove("wrongFlash"), 280);
+      return false;
+    }
+
+    function checkAllAnswers() {
+      if (showSolutionsMode) {
+        showToast("Lösungen sind eingeblendet. Zum Üben zuerst wieder ausblenden.");
+        return;
+      }
+
+      if (HOTSPOTS.length === 0) {
+        showToast("Bitte zuerst ein Projekt-ZIP laden.");
+        return;
+      }
+
+      let newlyCorrect = 0;
+      let wrong = 0;
+
+      HOTSPOTS.forEach((h) => {
+        if (solved.has(h.id)) return;
+        const ok = checkSingleAnswer(h.id);
+        if (ok) newlyCorrect += 1;
+        else wrong += 1;
+      });
+
+      if (solved.size === HOTSPOTS.length) {
+        showToast("Alles richtig gelöst.");
+      } else if (newlyCorrect > 0) {
+        showToast(`${newlyCorrect} richtig. Falsche Antworten wurden gelöscht.`);
+      } else if (wrong > 0) {
+        showToast("Noch nichts richtig. Falsche Antworten wurden gelöscht.");
+      }
+      updateProgress();
+    }
+
+    function resetAnswers(showMessage = true) {
+      answers = new Map();
+      solved = new Set();
+      hotspotElements.forEach(({ wrap, input }) => {
+        wrap.classList.remove("correct", "wrongFlash", "active");
+        input.disabled = false;
+        input.value = "";
+      });
+      updateProgress();
+      if (showMessage) showToast("Antworten zurückgesetzt.");
+    }
+
+    function setSolutionsMode(isActive) {
+      showSolutionsMode = isActive;
+      document.getElementById("app").classList.toggle("showSolutions", showSolutionsMode);
+      solutionsBtn.classList.toggle("solutionActive", showSolutionsMode);
+      solutionsBtn.textContent = showSolutionsMode ? "Lösungen ausblenden" : "Lösungen anzeigen";
+
+      if (showSolutionsMode) {
+        hideTimers.forEach((timer) => clearTimeout(timer));
+        hideTimers.clear();
+        showToast("Lösungen werden angezeigt.");
+      } else {
+        hotspotElements.forEach(({ wrap }) => wrap.classList.remove("active"));
+        showToast("Lösungen ausgeblendet.");
+      }
+    }
+
+    function updateProgress() {
+      if (HOTSPOTS.length === 0) {
+        progressText.innerHTML = "0/0 richtig · Projekt-ZIP laden";
+        return;
+      }
+      const dots = HOTSPOTS.map((h) => `<span class="dotProgress ${solved.has(h.id) ? "done" : ""}"></span>`).join("");
+      progressText.innerHTML = `${dots} ${solved.size}/${HOTSPOTS.length} richtig`;
+    }
+
+    function updateHotspotPositions() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const cameraDirection = new THREE.Vector3();
+      camera.getWorldDirection(cameraDirection);
+
+      HOTSPOTS.forEach((hotspot) => {
+        const elements = hotspotElements.get(hotspot.id);
+        if (!elements) return;
+
+        const pos = new THREE.Vector3(hotspot.position.x, hotspot.position.y, hotspot.position.z);
+        const toPoint = pos.clone().sub(camera.position).normalize();
+        const isBehindCamera = cameraDirection.dot(toPoint) < 0;
+
+        const projected = pos.clone().project(camera);
+        const x = (projected.x * 0.5 + 0.5) * width;
+        const y = (-projected.y * 0.5 + 0.5) * height;
+
+        const outside = projected.x < -1.2 || projected.x > 1.2 || projected.y < -1.2 || projected.y > 1.2 || isBehindCamera;
+        elements.wrap.style.display = outside ? "none" : "block";
+        elements.wrap.style.left = `${x}px`;
+        elements.wrap.style.top = `${y}px`;
+
+        const bubbleWouldOverflowRight = x + 215 > width;
+        elements.bubble.style.left = bubbleWouldOverflowRight ? "auto" : "26px";
+        elements.bubble.style.right = bubbleWouldOverflowRight ? "26px" : "auto";
+      });
+    }
+
+    async function loadProjectZip(file) {
+      if (!file) return;
+      try {
+        showToast("Projekt-ZIP wird geladen ...");
+        cleanupObjectUrls();
+
+        const zip = await JSZip.loadAsync(file);
+        const manifest = await readManifest(zip);
+        const hotspotsText = await readHotspotsJson(zip, manifest);
+        const modelFileRecords = await readModelFiles(zip, manifest);
+
+        if (modelFileRecords.length === 0) {
+          throw new Error("Kein OBJ-, GLTF- oder GLB-Modell im ZIP gefunden.");
+        }
+
+        await loadModelFromFileRecords(modelFileRecords);
+        loadHotspotsFromJson(hotspotsText, { silent: true });
+
+        const projectName = manifest?.projectName || getProjectNameFromHotspots(hotspotsText) || file.name.replace(/\.zip$/i, "");
+        projectTitle.textContent = projectName ? `3D Lernpunkte-App – ${projectName}` : "3D Lernpunkte-App";
+          statusSmall.textContent = `Projekt geladen: ${projectName}. ${HOTSPOTS.length} Punkt(e).`;
+        setSolutionsMode(false);
+        resetAnswers(false);
+        showToast(`Projekt geladen: ${projectName}`);
+      } catch (error) {
+        console.error(error);
+        showToast("Projekt-ZIP konnte nicht geladen werden.");
+        statusSmall.textContent = "Fehler beim Laden. Prüfe, ob im ZIP eine hotspots.json und ein OBJ/GLB/GLTF-Modell enthalten sind.";
+      }
+    }
+
+    async function readManifest(zip) {
+      const manifestEntry = findZipEntry(zip, "manifest.json");
+      if (!manifestEntry) return null;
+      try {
+        return JSON.parse(await manifestEntry.async("text"));
+      } catch (error) {
+        console.warn("manifest.json konnte nicht gelesen werden:", error);
+        return null;
+      }
+    }
+
+    async function readHotspotsJson(zip, manifest) {
+      const preferredPath = manifest?.hotspots || "hotspots.json";
+      const preferred = findZipEntry(zip, preferredPath);
+      if (preferred) return preferred.async("text");
+
+      const jsonEntries = Object.values(zip.files).filter((entry) => {
+        const name = entry.name.toLowerCase();
+        return !entry.dir && name.endsWith(".json") && !name.endsWith("manifest.json");
+      });
+
+      if (jsonEntries.length === 0) throw new Error("Keine hotspots.json im ZIP gefunden.");
+      return jsonEntries[0].async("text");
+    }
+
+    async function readModelFiles(zip, manifest) {
+      let paths = [];
+
+      if (manifest?.model?.files && Array.isArray(manifest.model.files)) {
+        paths = manifest.model.files;
+      }
+
+      if (paths.length === 0) {
+        paths = Object.values(zip.files)
+          .filter((entry) => {
+            const name = entry.name.toLowerCase();
+            return !entry.dir && (
+              name.endsWith(".glb") ||
+              name.endsWith(".gltf") ||
+              name.endsWith(".bin") ||
+              name.endsWith(".obj") ||
+              name.endsWith(".mtl") ||
+              name.endsWith(".jpg") ||
+              name.endsWith(".jpeg") ||
+              name.endsWith(".png") ||
+              name.endsWith(".webp")
+            );
+          })
+          .map((entry) => entry.name);
+      }
+
+      const records = [];
+      for (const path of paths) {
+        const entry = findZipEntry(zip, path);
+        if (!entry) continue;
+        const blob = await entry.async("blob");
+        const fileName = path.split("/").pop();
+        records.push({ path, name: fileName, blob });
+      }
+
+      return records;
+    }
+
+    async function loadModelFromFileRecords(records) {
+      const glb = records.find((r) => r.name.toLowerCase().endsWith(".glb"));
+      const gltf = records.find((r) => r.name.toLowerCase().endsWith(".gltf"));
+      const obj = records.find((r) => r.name.toLowerCase().endsWith(".obj"));
+      const mtl = records.find((r) => r.name.toLowerCase().endsWith(".mtl"));
+
+      const manager = new THREE.LoadingManager();
+      const urlMap = new Map();
+
+      records.forEach((record) => {
+        const url = URL.createObjectURL(record.blob);
+        activeObjectUrls.push(url);
+        urlMap.set(record.path, url);
+        urlMap.set(record.name, url);
+      });
+
+      manager.setURLModifier((url) => {
+        const cleanUrl = url.split("?")[0].split("#")[0];
+        const base = cleanUrl.split("/").pop();
+        return urlMap.get(cleanUrl) || urlMap.get(base) || url;
+      });
+
+      if (glb || gltf) {
+        const record = glb || gltf;
+        const loader = new GLTFLoader(manager);
+        const gltfData = await new Promise((resolve, reject) => loader.load(urlMap.get(record.path), resolve, undefined, reject));
+        setModel(gltfData.scene);
+        return;
+      }
+
+      if (obj) {
+        let materials = null;
+        if (mtl) {
+          const mtlText = await mtl.blob.text();
+          const mtlLoader = new MTLLoader(manager);
+          materials = mtlLoader.parse(mtlText, "");
+          materials.preload();
+        }
+
+        const objText = await obj.blob.text();
+        const objLoader = new OBJLoader(manager);
+        if (materials) objLoader.setMaterials(materials);
+        const object = objLoader.parse(objText);
+        setModel(object);
+        return;
+      }
+
+      throw new Error("Kein unterstütztes Modell gefunden.");
+    }
+
+    function loadHotspotsFromJson(text, options = {}) {
+      const { silent = false } = options;
+      const data = JSON.parse(text);
+      const rawHotspots = Array.isArray(data) ? data : data.hotspots;
+      if (!Array.isArray(rawHotspots)) throw new Error("JSON enthält keine Hotspots.");
+
+      HOTSPOTS = rawHotspots.map((h, index) => ({
+        id: h.id || `p${index + 1}`,
+        title: h.title || h.name || `Punkt ${index + 1}`,
+        position: h.position || { x: 0, y: 0, z: 0 },
+        normal: h.normal || { x: 0, y: 1, z: 0 },
+        solutions: Array.isArray(h.solutions)
+          ? h.solutions
+          : splitSolutions(h.solution || h.answer || h.correctAnswer || "")
+      })).filter((h) => isValidPosition(h.position));
+
+      createHotspotElements();
+      resetAnswers(false);
+      if (!silent) showToast(`${HOTSPOTS.length} Punkte geladen.`);
+    }
+
+    function getProjectNameFromHotspots(text) {
+      try {
+        const data = JSON.parse(text);
+        return data.projectName || null;
+      } catch {
+        return null;
+      }
+    }
+
+    function splitSolutions(value) {
+      return String(value || "")
+        .split(/[|;,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    function isValidPosition(position) {
+      return position && Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z);
+    }
+
+    function findZipEntry(zip, path) {
+      if (!path) return null;
+      const direct = zip.file(path);
+      if (direct) return direct;
+      const normalized = path.replace(/^\.\//, "");
+      const normalizedDirect = zip.file(normalized);
+      if (normalizedDirect) return normalizedDirect;
+      const base = path.split("/").pop();
+      return Object.values(zip.files).find((entry) => !entry.dir && entry.name.split("/").pop() === base) || null;
+    }
+
+    function cleanupObjectUrls() {
+      activeObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+      activeObjectUrls = [];
+    }
+
+    function setBackgroundColor(color) {
+      scene.background = new THREE.Color(color);
+      document.documentElement.style.setProperty("--bg", color);
+      document.body.style.background = color;
+      customBgColor.value = toHexColor(color);
+      backgroundButtons.forEach((button) => {
+        button.classList.toggle("activeBg", button.dataset.bg.toLowerCase() === toHexColor(color).toLowerCase());
+      });
+    }
+
+    function toHexColor(color) {
+      const parsed = new THREE.Color(color);
+      return `#${parsed.getHexString()}`;
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(showToast.timeout);
+      showToast.timeout = setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+
+    function runSelfTests() {
+      const results = [];
+      const assert = (name, condition) => {
+        results.push({ name, passed: Boolean(condition) });
+        if (!condition) console.error(`Test fehlgeschlagen: ${name}`);
+      };
+
+      assert("THREE wurde geladen", typeof THREE.Scene === "function");
+      assert("OrbitControls wurde geladen", typeof OrbitControls === "function");
+      assert("GLTFLoader wurde geladen", typeof GLTFLoader === "function");
+      assert("OBJLoader wurde geladen", typeof OBJLoader === "function");
+      assert("MTLLoader wurde geladen", typeof MTLLoader === "function");
+      assert("JSZip wurde geladen", typeof JSZip === "function");
+      assert("Platzhaltermodell existiert", currentModel && currentModel.name === "Platzhalter-Würfel");
+      assert("Normalisierung ignoriert Grossschreibung", normalizeText(" Test ") === "test");
+      assert("Umlaute werden tolerant verglichen", normalizeText("Lösung") === normalizeText("Losung"));
+      assert("Richtige Antwort wird erkannt", isCorrect({ solutions: ["Test"] }, "test"));
+      assert("Falsche Antwort wird abgelehnt", !isCorrect({ solutions: ["Test"] }, "falsch"));
+      assert("Position ist gültig", isValidPosition({ x: 0, y: 1, z: 2 }));
+      assert("Primärlösung wird angezeigt", getPrimarySolution({ solutions: ["Testlösung", "Alternative"] }) === "Testlösung");
+      assert("Leerer Fortschritt korrekt", HOTSPOTS.length === 0);
+      setBackgroundColor("#101827");
+      assert("Hintergrundfarbe kann gesetzt werden", scene.background.getHexString() === "101827");
+
+      const passed = results.filter((r) => r.passed).length;
+      const total = results.length;
+      console.log("Self tests:", results);
+      testPanel.innerHTML = `<strong>Tests:</strong> ${passed}/${total} erfolgreich`;
+      testPanel.classList.add("show");
+      setTimeout(() => testPanel.classList.remove("show"), 3200);
+    }
+
+    projectZipInput.addEventListener("change", (event) => loadProjectZip(event.target.files?.[0]));
+    checkBtn.addEventListener("click", checkAllAnswers);
+    resetBtn.addEventListener("click", () => resetAnswers(true));
+    viewBtn.addEventListener("click", () => currentModel && fitCameraToObject(currentModel));
+    settingsBtn.addEventListener("click", () => settingsPanel.classList.toggle("open"));
+    solutionsBtn.addEventListener("click", () => setSolutionsMode(!showSolutionsMode));
+    backgroundButtons.forEach((button) => {
+      button.addEventListener("click", () => setBackgroundColor(button.dataset.bg));
+    });
+    applyCustomBgBtn.addEventListener("click", () => setBackgroundColor(customBgColor.value));
+    customBgColor.addEventListener("input", () => setBackgroundColor(customBgColor.value));
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      updateHotspotPositions();
+    });
+
+    window.addEventListener("beforeunload", cleanupObjectUrls);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      updateHotspotPositions();
+      renderer.render(scene, camera);
+    }
+
+    setModel(createPlaceholderCube());
+    HOTSPOTS = [];
+    createHotspotElements();
+    updateProgress();
+    runSelfTests();
+    animate();
+  </script>
+</body>
+</html>
