@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D Lernobjekt erstellen</title>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.92);
+      --panel-light: rgba(255,255,255,.96);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --green: #22c55e;
+      --green-soft: rgba(34,197,94,.24);
+      --orange: #f97316;
+      --red: #ef4444;
+      --teal: #14b8a6;
+      --border: rgba(255,255,255,0.14);
+      --shadow: 0 18px 50px rgba(0,0,0,.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    #scene {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    #hotspotLayer {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .topbar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .titlebox {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 10px 13px;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+      width: min(510px, 48vw);
+    }
+
+    .titlebox h1 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      line-height: 1.1;
+      font-weight: 850;
+    }
+
+    .projectRow {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .projectRow input {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 12px;
+      background: rgba(255,255,255,.1);
+      color: white;
+      padding: 8px 10px;
+      outline: none;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 760;
+    }
+
+    .projectRow input::placeholder { color: #94a3b8; }
+
+    .titlebox p {
+      margin: 7px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.25;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+      max-width: 54vw;
+    }
+
+    button, .fileButton {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(15,23,42,.84);
+      color: white;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0,0,0,.18);
+      user-select: none;
+    }
+
+    button:active, .fileButton:active { transform: translateY(1px); }
+    button.green { background: var(--green); color: #052e16; }
+    button.red { background: var(--red); color: white; }
+    button.orange { background: var(--orange); color: #431407; }
+    button.teal { background: var(--teal); color: #042f2e; }
+    input[type="file"] { display: none; }
+
+    .statusBox {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 15;
+      width: min(620px, calc(100vw - 24px));
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 10px 12px;
+      color: #dbeafe;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .statusBox strong { color: white; }
+    .statusBox small { color: var(--muted); }
+
+    .toast {
+      position: absolute;
+      top: 86px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      display: none;
+      max-width: calc(100vw - 24px);
+      background: rgba(15,23,42,.96);
+      color: white;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+      padding: 10px 14px;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .toast.show { display: block; }
+
+    .hotspotWrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      overflow: visible;
+      z-index: 1;
+    }
+
+    .hotspotPoint {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 13px;
+      height: 13px;
+      border-radius: 999px;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(255,255,255,.9);
+      box-shadow:
+        0 0 10px rgba(255,255,255,.95),
+        0 0 22px rgba(255,255,255,.55),
+        0 0 40px rgba(20,184,166,.28);
+      cursor: pointer;
+      transition: background .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    .hotspotPoint::before,
+    .hotspotPoint::after {
+      content: "";
+      position: absolute;
+      inset: -9px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.78);
+      animation: pulseWhite 1.7s ease-out infinite;
+      pointer-events: none;
+    }
+
+    .hotspotPoint::after {
+      animation-delay: .55s;
+      opacity: .55;
+    }
+
+    .hotspotWrap:hover .hotspotPoint,
+    .hotspotWrap.active .hotspotPoint,
+    .hotspotWrap:focus-within .hotspotPoint {
+      transform: translate(-50%, -50%) scale(1.18);
+    }
+
+    .hotspotWrap.complete .hotspotPoint {
+      background: var(--green);
+      border-color: rgba(187,247,208,.98);
+      box-shadow:
+        0 0 12px rgba(34,197,94,.95),
+        0 0 28px rgba(34,197,94,.72),
+        0 0 50px rgba(20,184,166,.42);
+    }
+
+    .hotspotWrap.complete .hotspotPoint::before,
+    .hotspotWrap.complete .hotspotPoint::after {
+      border-color: rgba(34,197,94,.8);
+      animation-name: pulseGreen;
+    }
+
+    @keyframes pulseWhite {
+      0% { transform: scale(.35); opacity: .85; }
+      100% { transform: scale(1.65); opacity: 0; }
+    }
+
+    @keyframes pulseGreen {
+      0% { transform: scale(.35); opacity: .72; }
+      100% { transform: scale(1.85); opacity: 0; }
+    }
+
+    .answerBubble {
+      position: absolute;
+      left: 26px;
+      top: 50%;
+      width: 220px;
+      transform: translateY(-50%) translateX(-4px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      padding: 9px;
+      border-radius: 13px;
+      background: rgba(229,231,235,.96);
+      border: 1px solid rgba(148,163,184,.55);
+      color: #111827;
+      box-shadow: 0 14px 34px rgba(0,0,0,.28);
+      transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+    }
+
+    .hotspotWrap:hover .answerBubble,
+    .hotspotWrap.active .answerBubble,
+    .hotspotWrap:focus-within .answerBubble {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateY(-50%) translateX(0);
+    }
+
+    .hotspotWrap.complete .answerBubble {
+      background: rgba(220,252,231,.96);
+      border-color: rgba(34,197,94,.65);
+      box-shadow: 0 0 0 3px var(--green-soft), 0 14px 34px rgba(0,0,0,.28);
+    }
+
+    .hotspotWrap.forceHidden .answerBubble {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      transform: translateY(-50%) translateX(-4px) !important;
+    }
+
+    .bubbleTitle {
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 7px;
+      color: #374151;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hotspotWrap.complete .bubbleTitle { color: #052e16; }
+
+    .pointInput,
+    .solutionInput {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(107,114,128,.42);
+      border-radius: 9px;
+      padding: 8px 9px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 760;
+      color: #111827;
+      background: rgba(255,255,255,.96);
+      outline: none;
+      margin-bottom: 7px;
+    }
+
+    .solutionInput {
+      min-height: 58px;
+      resize: vertical;
+      line-height: 1.25;
+    }
+
+    .pointInput:focus,
+    .solutionInput:focus {
+      border-color: rgba(20,184,166,.95);
+      box-shadow: 0 0 0 3px rgba(20,184,166,.18);
+    }
+
+    .bubbleHelp {
+      color: #6b7280;
+      font-size: 11px;
+      line-height: 1.25;
+      margin: 0 0 7px;
+    }
+
+    .miniRow {
+      display: flex;
+      gap: 6px;
+    }
+
+    .miniRow button {
+      padding: 7px 8px;
+      font-size: 11px;
+      box-shadow: none;
+      flex: 1;
+      border-color: rgba(15,23,42,.12);
+    }
+
+    .counterBox {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 15;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 9px 11px;
+      color: #dbeafe;
+      font-size: 13px;
+    }
+
+    .testPanel {
+      position: absolute;
+      right: 12px;
+      bottom: 62px;
+      z-index: 15;
+      background: rgba(15,23,42,.86);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #cbd5e1;
+      display: none;
+      max-width: min(360px, calc(100vw - 24px));
+    }
+
+    .testPanel.show { display: block; }
+    .testPanel strong { color: white; }
+
+    @media (max-width: 860px) {
+      .titlebox { max-width: 48vw; width: 48vw; }
+      .titlebox p { display: none; }
+      .projectRow input { font-size: 12px; padding: 8px; }
+      .actions { max-width: 50vw; gap: 6px; }
+      button, .fileButton { font-size: 12px; padding: 9px 9px; }
+      .statusBox { display: none; }
+      .counterBox { left: 12px; right: auto; bottom: 12px; }
+      .answerBubble { width: min(210px, 58vw); left: 24px; }
+      .bubbleTitle { font-size: 10px; }
+      .pointInput, .solutionInput { font-size: 12px; padding: 7px; }
+      .testPanel { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+    <div id="hotspotLayer"></div>
+
+    <div class="topbar">
+      <div class="titlebox">
+        <h1>3D Lernobjekt erstellen</h1>
+        <div class="projectRow">
+          <input id="projectNameInput" type="text" value="Mein 3D-Lernobjekt" placeholder="Name für ZIP-Export" />
+        </div>
+        <p>Modell oder Modell-ZIP laden, Punkte setzen, Lösungen eingeben und fertige ZIP-Datei exportieren.</p>
+      </div>
+      <div class="actions">
+        <label class="fileButton" for="modelInput">3D Objekt laden</label>
+        <input id="modelInput" type="file" multiple accept=".zip,.glb,.gltf,.obj,.mtl,.bin,.jpg,.jpeg,.png,.webp" />
+        <label class="fileButton" for="projectInput">Projekt-ZIP öffnen</label>
+        <input id="projectInput" type="file" accept=".zip" />
+        <button id="addModeBtn" class="teal">Punkte setzen: EIN</button>
+        <button id="exportBtn" class="orange">Fertige ZIP exportieren</button>
+        <button id="clearBtn" class="red">Punkte löschen</button>
+        <button id="viewBtn">Ansicht</button>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+    <div id="testPanel" class="testPanel"></div>
+
+    <div class="statusBox">
+      <strong>Ablauf:</strong> 3D-Objekt laden → auf das Modell klicken → Punktname und Lösung eingeben. Die Punkte funktionieren wie in der Lernapp: pulsierend, mit Textfeld rechts beim Hover/Antippen.<br />
+      <small>Mehrere richtige Lösungen mit Komma, Semikolon, Zeilenumbruch oder | trennen. Beispiel: Pankreas; Bauchspeicheldrüse</small>
+    </div>
+
+    <div id="counterBox" class="counterBox">0 Punkt(e)</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+    import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+    import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
+    import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
+
+    const canvas = document.getElementById("scene");
+    const hotspotLayer = document.getElementById("hotspotLayer");
+    const modelInput = document.getElementById("modelInput");
+    const projectInput = document.getElementById("projectInput");
+    const projectNameInput = document.getElementById("projectNameInput");
+    const addModeBtn = document.getElementById("addModeBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const viewBtn = document.getElementById("viewBtn");
+    const toast = document.getElementById("toast");
+    const testPanel = document.getElementById("testPanel");
+    const counterBox = document.getElementById("counterBox");
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x101827);
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.01, 1000);
+    camera.position.set(3.2, 2.6, 4.4);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, 0);
+    controls.minDistance = 1;
+    controls.maxDistance = 30;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 2.0));
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    dirLight.position.set(4, 7, 5);
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    fillLight.position.set(-5, 3, -4);
+    scene.add(fillLight);
+
+    const grid = new THREE.GridHelper(8, 8, 0x334155, 0x1e293b);
+    grid.position.y = -1.02;
+    scene.add(grid);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    let currentModel = null;
+    let modelLoaded = false;
+    let addMode = true;
+    let HOTSPOTS = [];
+    let hotspotElements = new Map();
+    let hideTimers = new Map();
+    let modelFilesForExport = [];
+    let activeObjectUrls = [];
+    let lastPointerDown = { x: 0, y: 0, time: 0 };
+    let pointerDragDistance = 0;
+    let suppressNextClick = false;
+    const CLICK_DRAG_THRESHOLD = 8;
+
+    function createId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+      return `hotspot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    function createPlaceholderCube() {
+      const group = new THREE.Group();
+      group.name = "Platzhalter-Würfel";
+      const geometry = new THREE.BoxGeometry(2, 2, 2);
+      const materials = [
+        new THREE.MeshStandardMaterial({ color: 0x14b8a6, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xa78bfa, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.55, metalness: 0.05 }),
+        new THREE.MeshStandardMaterial({ color: 0xfb7185, roughness: 0.55, metalness: 0.05 })
+      ];
+      const cube = new THREE.Mesh(geometry, materials);
+      group.add(cube);
+
+      const edges = new THREE.EdgesGeometry(geometry);
+      const edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }));
+      group.add(edgeLines);
+      return group;
+    }
+
+    function setModel(model, hasRealModel = true) {
+      if (currentModel) scene.remove(currentModel);
+      currentModel = model;
+      modelLoaded = hasRealModel;
+      scene.add(currentModel);
+      normalizeModel(currentModel);
+      fitCameraToObject(currentModel);
+      showToast(hasRealModel ? "3D-Objekt geladen." : "Platzhalter geladen.");
+    }
+
+    function normalizeModel(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      object.position.sub(center);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim > 0) object.scale.setScalar(2.6 / maxDim);
+
+      object.traverse((child) => {
+        if (child.isMesh) {
+          child.userData.isModelPart = true;
+          if (child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((m) => {
+              if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+              m.needsUpdate = true;
+            });
+          }
+        }
+      });
+    }
+
+    function fitCameraToObject(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+
+      const maxDim = Math.max(size.x, size.y, size.z, 1);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+      cameraZ *= 1.8;
+
+      camera.position.set(center.x + cameraZ * 0.8, center.y + cameraZ * 0.55, center.z + cameraZ);
+      camera.near = Math.max(0.01, cameraZ / 100);
+      camera.far = cameraZ * 100;
+      camera.updateProjectionMatrix();
+      controls.target.copy(center);
+      controls.update();
+    }
+
+    function getModelMeshes() {
+      const meshes = [];
+      if (!currentModel) return meshes;
+      currentModel.traverse((child) => {
+        if (child.isMesh && child.userData.isModelPart) meshes.push(child);
+      });
+      return meshes;
+    }
+
+    function getPointerFromEvent(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function handleCanvasClick(event) {
+      if (!addMode) return;
+      if (!currentModel) return;
+
+      if (suppressNextClick || pointerDragDistance > CLICK_DRAG_THRESHOLD) {
+        suppressNextClick = false;
+        pointerDragDistance = 0;
+        return;
+      }
+
+      const now = performance.now();
+      const dx = Math.abs((event.clientX ?? 0) - lastPointerDown.x);
+      const dy = Math.abs((event.clientY ?? 0) - lastPointerDown.y);
+      const moved = Math.hypot(dx, dy) > CLICK_DRAG_THRESHOLD;
+      if (moved && now - lastPointerDown.time < 800) return;
+
+      getPointerFromEvent(event);
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(getModelMeshes(), true);
+      if (hits.length === 0) return;
+
+      const hit = hits[0];
+      const normal = hit.face?.normal ? hit.face.normal.clone() : new THREE.Vector3(0, 1, 0);
+      normal.transformDirection(hit.object.matrixWorld);
+      createHotspot(hit.point, normal);
+    }
+
+    function createHotspot(position, normal = new THREE.Vector3(0, 1, 0)) {
+      const index = HOTSPOTS.length + 1;
+      const hotspot = {
+        id: createId(),
+        title: `Punkt ${index}`,
+        position: roundVector(position),
+        normal: roundVector(normal),
+        solutions: [],
+        note: ""
+      };
+      HOTSPOTS.push(hotspot);
+      createHotspotElements();
+      showBubble(hotspot.id);
+      const element = hotspotElements.get(hotspot.id);
+      if (element) element.titleInput.focus();
+      updateCounter();
+      showToast("Punkt gesetzt. Name und Lösung eingeben.");
+    }
+
+    function roundVector(v) {
+      return {
+        x: Number(v.x.toFixed(6)),
+        y: Number(v.y.toFixed(6)),
+        z: Number(v.z.toFixed(6))
+      };
+    }
+
+    function createHotspotElements() {
+      hotspotLayer.innerHTML = "";
+      hotspotElements.clear();
+      hideTimers.forEach((timer) => clearTimeout(timer));
+      hideTimers.clear();
+
+      HOTSPOTS.forEach((hotspot, index) => {
+        const wrap = document.createElement("div");
+        wrap.className = "hotspotWrap";
+        wrap.dataset.id = hotspot.id;
+        wrap.tabIndex = 0;
+        if (hasCompleteSolution(hotspot)) wrap.classList.add("complete");
+
+        const point = document.createElement("div");
+        point.className = "hotspotPoint";
+        point.title = hotspot.title || `Punkt ${index + 1}`;
+
+        const bubble = document.createElement("div");
+        bubble.className = "answerBubble";
+
+        const title = document.createElement("div");
+        title.className = "bubbleTitle";
+        title.textContent = hotspot.title || `Punkt ${index + 1}`;
+
+        const titleInput = document.createElement("input");
+        titleInput.className = "pointInput";
+        titleInput.type = "text";
+        titleInput.value = hotspot.title || "";
+        titleInput.placeholder = "Name am Punkt";
+
+        const solutionInput = document.createElement("textarea");
+        solutionInput.className = "solutionInput";
+        solutionInput.value = Array.isArray(hotspot.solutions) ? hotspot.solutions.join("; ") : "";
+        solutionInput.placeholder = "Richtige Lösung(en)";
+
+        const help = document.createElement("p");
+        help.className = "bubbleHelp";
+        help.textContent = "Varianten mit ; , | oder Zeilenumbruch trennen.";
+
+        const row = document.createElement("div");
+        row.className = "miniRow";
+
+        const saveBtn = document.createElement("button");
+        saveBtn.type = "button";
+        saveBtn.className = "green";
+        saveBtn.textContent = "Speichern";
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "red";
+        deleteBtn.textContent = "Löschen";
+
+        row.appendChild(saveBtn);
+        row.appendChild(deleteBtn);
+
+        bubble.appendChild(title);
+        bubble.appendChild(titleInput);
+        bubble.appendChild(solutionInput);
+        bubble.appendChild(help);
+        bubble.appendChild(row);
+        wrap.appendChild(point);
+        wrap.appendChild(bubble);
+        hotspotLayer.appendChild(wrap);
+
+        const show = () => showBubble(hotspot.id);
+        const delayedHide = () => scheduleHideBubble(hotspot.id, 1000);
+
+        wrap.addEventListener("mouseenter", show);
+        wrap.addEventListener("mouseleave", () => {
+          wrap.classList.remove("forceHidden");
+          delayedHide();
+        });
+        wrap.addEventListener("focusin", show);
+        wrap.addEventListener("focusout", delayedHide);
+        wrap.addEventListener("click", (event) => {
+          event.stopPropagation();
+          showBubble(hotspot.id);
+          if (event.target === point || event.target === wrap) titleInput.focus();
+        });
+
+        const save = (options = {}) => saveHotspot(hotspot.id, titleInput.value, solutionInput.value, options);
+        const saveAndCollapse = () => save({ collapse: true });
+        titleInput.addEventListener("change", () => save());
+        solutionInput.addEventListener("change", () => save());
+        titleInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            saveAndCollapse();
+          }
+        });
+        solutionInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            saveAndCollapse();
+          }
+        });
+        saveBtn.addEventListener("click", saveAndCollapse);
+        deleteBtn.addEventListener("click", () => deleteHotspot(hotspot.id));
+
+        hotspotElements.set(hotspot.id, { wrap, point, bubble, title, titleInput, solutionInput });
+      });
+
+      updateCounter();
+    }
+
+    function hasCompleteSolution(hotspot) {
+      return Array.isArray(hotspot.solutions) && hotspot.solutions.some((s) => String(s || "").trim());
+    }
+
+    function saveHotspot(id, titleValue, solutionValue, options = {}) {
+      const hotspot = HOTSPOTS.find((h) => h.id === id);
+      const elements = hotspotElements.get(id);
+      if (!hotspot || !elements) return;
+
+      const fallbackNumber = HOTSPOTS.findIndex((h) => h.id === id) + 1;
+      hotspot.title = titleValue.trim() || `Punkt ${fallbackNumber}`;
+      hotspot.solutions = splitSolutions(solutionValue);
+      elements.title.textContent = hotspot.title;
+      elements.point.title = hotspot.title;
+      elements.wrap.classList.toggle("complete", hasCompleteSolution(hotspot));
+      updateCounter();
+      showToast("Punkt gespeichert.");
+      if (options.collapse) collapseBubble(id, 500);
+    }
+
+    function deleteHotspot(id) {
+      const hotspot = HOTSPOTS.find((h) => h.id === id);
+      if (!hotspot) return;
+      if (!confirm(`Punkt "${hotspot.title || "Unbenannt"}" wirklich löschen?`)) return;
+      HOTSPOTS = HOTSPOTS.filter((h) => h.id !== id);
+      createHotspotElements();
+      updateCounter();
+      showToast("Punkt gelöscht.");
+    }
+
+    function showBubble(id) {
+      const elements = hotspotElements.get(id);
+      if (!elements) return;
+      elements.wrap.classList.remove("forceHidden");
+      const timer = hideTimers.get(id);
+      if (timer) clearTimeout(timer);
+      hideTimers.delete(id);
+      elements.wrap.classList.add("active");
+    }
+
+    function collapseBubble(id, delay = 500) {
+      const elements = hotspotElements.get(id);
+      if (!elements) return;
+      const oldTimer = hideTimers.get(id);
+      if (oldTimer) clearTimeout(oldTimer);
+      const timer = setTimeout(() => {
+        elements.titleInput.blur();
+        elements.solutionInput.blur();
+        elements.wrap.classList.remove("active");
+        elements.wrap.classList.add("forceHidden");
+        hideTimers.delete(id);
+      }, delay);
+      hideTimers.set(id, timer);
+    }
+
+    function scheduleHideBubble(id, delay = 1000) {
+      const elements = hotspotElements.get(id);
+      if (!elements) return;
+      const oldTimer = hideTimers.get(id);
+      if (oldTimer) clearTimeout(oldTimer);
+      const timer = setTimeout(() => {
+        if (elements.wrap.matches(":hover") || elements.wrap.matches(":focus-within")) return;
+        elements.wrap.classList.remove("active");
+        hideTimers.delete(id);
+      }, delay);
+      hideTimers.set(id, timer);
+    }
+
+    function updateHotspotPositions() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const cameraDirection = new THREE.Vector3();
+      camera.getWorldDirection(cameraDirection);
+
+      HOTSPOTS.forEach((hotspot) => {
+        const elements = hotspotElements.get(hotspot.id);
+        if (!elements) return;
+
+        const pos = new THREE.Vector3(hotspot.position.x, hotspot.position.y, hotspot.position.z);
+        const toPoint = pos.clone().sub(camera.position).normalize();
+        const isBehindCamera = cameraDirection.dot(toPoint) < 0;
+
+        const projected = pos.clone().project(camera);
+        const x = (projected.x * 0.5 + 0.5) * width;
+        const y = (-projected.y * 0.5 + 0.5) * height;
+
+        const outside = projected.x < -1.2 || projected.x > 1.2 || projected.y < -1.2 || projected.y > 1.2 || isBehindCamera;
+        elements.wrap.style.display = outside ? "none" : "block";
+        elements.wrap.style.left = `${x}px`;
+        elements.wrap.style.top = `${y}px`;
+
+        const bubbleWouldOverflowRight = x + 260 > width;
+        elements.bubble.style.left = bubbleWouldOverflowRight ? "auto" : "26px";
+        elements.bubble.style.right = bubbleWouldOverflowRight ? "26px" : "auto";
+      });
+    }
+
+    function updateCounter() {
+      const complete = HOTSPOTS.filter(hasCompleteSolution).length;
+      counterBox.textContent = `${HOTSPOTS.length} Punkt(e) · ${complete} mit Lösung`;
+    }
+
+    function splitSolutions(value) {
+      return String(value || "")
+        .split(/[|;,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+
+    function sanitizeFileName(name) {
+      const clean = String(name || "3d-lernobjekt")
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, "-")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+      return clean || "3d-lernobjekt";
+    }
+
+    function isValidPosition(position) {
+      return position && Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z);
+    }
+
+    function buildHotspotsConfig() {
+      return {
+        app: "3d-lernpunkte-app",
+        version: 2,
+        projectName: projectNameInput.value.trim() || "3D Lernobjekt",
+        createdAt: new Date().toISOString(),
+        modelNote: "Die Koordinaten beziehen sich auf das normalisierte Modell in der 3D Lernpunkte-App.",
+        hotspots: HOTSPOTS.map((h, index) => ({
+          id: h.id || `p${index + 1}`,
+          title: h.title || `Punkt ${index + 1}`,
+          position: h.position,
+          normal: h.normal || { x: 0, y: 1, z: 0 },
+          solutions: Array.isArray(h.solutions) ? h.solutions : [],
+          note: h.note || ""
+        }))
+      };
+    }
+
+    async function exportProjectZip() {
+      saveAllVisibleHotspots();
+
+      if (!modelLoaded || modelFilesForExport.length === 0) {
+        showToast("Bitte zuerst ein 3D-Objekt oder Modell-ZIP laden.");
+        return;
+      }
+
+      if (HOTSPOTS.length === 0) {
+        const ok = confirm("Es wurden noch keine Punkte gesetzt. Trotzdem exportieren?");
+        if (!ok) return;
+      }
+
+      const missingSolutions = HOTSPOTS.filter((h) => !hasCompleteSolution(h)).length;
+      if (missingSolutions > 0) {
+        const ok = confirm(`${missingSolutions} Punkt(e) haben noch keine Lösung. Trotzdem exportieren?`);
+        if (!ok) return;
+      }
+
+      const projectName = projectNameInput.value.trim() || "3D Lernobjekt";
+      const fileBase = sanitizeFileName(projectName);
+      const zip = new JSZip();
+      const modelFiles = [];
+
+      for (const fileRecord of modelFilesForExport) {
+        const path = `models/${fileRecord.name}`;
+        zip.file(path, await fileRecord.file.arrayBuffer());
+        modelFiles.push(path);
+      }
+
+      zip.file("hotspots.json", JSON.stringify(buildHotspotsConfig(), null, 2));
+
+      const mainModel = chooseMainModelFile(modelFilesForExport.map((r) => r.name));
+      const manifest = {
+        app: "3d-lernpunkte-project-bundle",
+        version: 1,
+        projectName,
+        createdAt: new Date().toISOString(),
+        hotspots: "hotspots.json",
+        model: {
+          main: mainModel ? `models/${mainModel}` : null,
+          files: modelFiles
+        }
+      };
+      zip.file("manifest.json", JSON.stringify(manifest, null, 2));
+
+      showToast("ZIP wird erstellt ...");
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+      downloadBlob(blob, `${fileBase}.zip`);
+      showToast(`Exportiert: ${fileBase}.zip`);
+    }
+
+    function saveAllVisibleHotspots() {
+      hotspotElements.forEach((elements, id) => {
+        saveHotspot(id, elements.titleInput.value, elements.solutionInput.value);
+      });
+    }
+
+    function chooseMainModelFile(fileNames) {
+      return fileNames.find((n) => n.toLowerCase().endsWith(".glb")) ||
+        fileNames.find((n) => n.toLowerCase().endsWith(".gltf")) ||
+        fileNames.find((n) => n.toLowerCase().endsWith(".obj")) ||
+        fileNames[0] || null;
+    }
+
+    function downloadBlob(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function handleModelInput(files) {
+      const fileArray = Array.from(files || []);
+      if (fileArray.length === 0) return;
+
+      if (fileArray.length === 1 && fileArray[0].name.toLowerCase().endsWith(".zip")) {
+        await loadModelZip(fileArray[0]);
+        return;
+      }
+
+      await loadModelFromFiles(fileArray, { clearHotspots: true });
+    }
+
+    async function loadModelZip(zipFile) {
+      try {
+        showToast("Modell-ZIP wird geladen ...");
+        const zip = await JSZip.loadAsync(zipFile);
+        const manifest = await readManifest(zip);
+        const modelRecords = await readModelFiles(zip, manifest);
+        if (modelRecords.length === 0) throw new Error("Keine Modelldateien im ZIP gefunden.");
+
+        await loadModelFromRecords(modelRecords, { clearHotspots: true });
+        showToast("Modell-ZIP geladen. Punkte können gesetzt werden.");
+      } catch (error) {
+        console.error(error);
+        showToast("Modell-ZIP konnte nicht geladen werden.");
+      }
+    }
+
+    async function loadExistingProjectZip(zipFile) {
+      try {
+        showToast("Projekt-ZIP wird geladen ...");
+        const zip = await JSZip.loadAsync(zipFile);
+        const manifest = await readManifest(zip);
+        const hotspotsText = await readHotspotsJson(zip, manifest);
+        const modelRecords = await readModelFiles(zip, manifest);
+        if (modelRecords.length === 0) throw new Error("Keine Modelldateien im ZIP gefunden.");
+
+        await loadModelFromRecords(modelRecords, { clearHotspots: false });
+        loadHotspotsFromJson(hotspotsText);
+
+        const projectName = manifest?.projectName || getProjectNameFromHotspots(hotspotsText) || zipFile.name.replace(/\.zip$/i, "");
+        projectNameInput.value = projectName || projectNameInput.value;
+        showToast(`Projekt geladen: ${projectName}`);
+      } catch (error) {
+        console.error(error);
+        showToast("Projekt-ZIP konnte nicht geladen werden.");
+      }
+    }
+
+    async function loadModelFromFiles(files, options = {}) {
+      const records = files.map((file) => ({ name: file.name, path: file.name, file, blob: file }));
+      await loadModelFromRecords(records, options);
+    }
+
+    async function loadModelFromRecords(records, options = {}) {
+      const { clearHotspots = true } = options;
+      cleanupObjectUrls();
+      modelFilesForExport = records.map((record) => ({ name: record.name, file: record.file || new File([record.blob], record.name, { type: guessMimeType(record.name) }) }));
+
+      const glb = records.find((r) => r.name.toLowerCase().endsWith(".glb"));
+      const gltf = records.find((r) => r.name.toLowerCase().endsWith(".gltf"));
+      const obj = records.find((r) => r.name.toLowerCase().endsWith(".obj"));
+      const mtl = records.find((r) => r.name.toLowerCase().endsWith(".mtl"));
+
+      const manager = new THREE.LoadingManager();
+      const urlMap = new Map();
+
+      records.forEach((record) => {
+        const url = URL.createObjectURL(record.blob || record.file);
+        activeObjectUrls.push(url);
+        urlMap.set(record.path || record.name, url);
+        urlMap.set(record.name, url);
+      });
+
+      manager.setURLModifier((url) => {
+        const cleanUrl = url.split("?")[0].split("#")[0];
+        const base = cleanUrl.split("/").pop();
+        return urlMap.get(cleanUrl) || urlMap.get(base) || url;
+      });
+
+      if (glb || gltf) {
+        const record = glb || gltf;
+        const loader = new GLTFLoader(manager);
+        const gltfData = await new Promise((resolve, reject) => loader.load(urlMap.get(record.path || record.name), resolve, undefined, reject));
+        setModel(gltfData.scene, true);
+      } else if (obj) {
+        let materials = null;
+        if (mtl) {
+          const mtlText = await (mtl.blob || mtl.file).text();
+          const mtlLoader = new MTLLoader(manager);
+          materials = mtlLoader.parse(mtlText, "");
+          materials.preload();
+        }
+        const objText = await (obj.blob || obj.file).text();
+        const objLoader = new OBJLoader(manager);
+        if (materials) objLoader.setMaterials(materials);
+        const object = objLoader.parse(objText);
+        setModel(object, true);
+      } else {
+        throw new Error("Kein unterstütztes Modell gefunden.");
+      }
+
+      if (clearHotspots) {
+        HOTSPOTS = [];
+        createHotspotElements();
+      }
+      updateCounter();
+    }
+
+    async function readManifest(zip) {
+      const entry = findZipEntry(zip, "manifest.json");
+      if (!entry) return null;
+      try {
+        return JSON.parse(await entry.async("text"));
+      } catch {
+        return null;
+      }
+    }
+
+    async function readHotspotsJson(zip, manifest) {
+      const preferred = findZipEntry(zip, manifest?.hotspots || "hotspots.json");
+      if (preferred) return preferred.async("text");
+
+      const fallback = Object.values(zip.files).find((entry) => {
+        const name = entry.name.toLowerCase();
+        return !entry.dir && name.endsWith(".json") && !name.endsWith("manifest.json");
+      });
+      if (!fallback) throw new Error("Keine hotspots.json gefunden.");
+      return fallback.async("text");
+    }
+
+    async function readModelFiles(zip, manifest) {
+      let paths = Array.isArray(manifest?.model?.files) ? manifest.model.files : [];
+      if (paths.length === 0) {
+        paths = Object.values(zip.files)
+          .filter((entry) => {
+            const name = entry.name.toLowerCase();
+            return !entry.dir && (
+              name.endsWith(".glb") ||
+              name.endsWith(".gltf") ||
+              name.endsWith(".bin") ||
+              name.endsWith(".obj") ||
+              name.endsWith(".mtl") ||
+              name.endsWith(".jpg") ||
+              name.endsWith(".jpeg") ||
+              name.endsWith(".png") ||
+              name.endsWith(".webp")
+            );
+          })
+          .map((entry) => entry.name);
+      }
+
+      const records = [];
+      for (const path of paths) {
+        const entry = findZipEntry(zip, path);
+        if (!entry) continue;
+        const blob = await entry.async("blob");
+        const name = path.split("/").pop();
+        records.push({ path, name, blob, file: new File([blob], name, { type: guessMimeType(name) }) });
+      }
+      return records;
+    }
+
+    function loadHotspotsFromJson(text) {
+      const data = JSON.parse(text);
+      const rawHotspots = Array.isArray(data) ? data : data.hotspots;
+      if (!Array.isArray(rawHotspots)) throw new Error("JSON enthält keine Hotspots.");
+      if (data.projectName) projectNameInput.value = data.projectName;
+
+      HOTSPOTS = rawHotspots.map((h, index) => ({
+        id: h.id || `p${index + 1}`,
+        title: h.title || h.name || `Punkt ${index + 1}`,
+        position: h.position || { x: 0, y: 0, z: 0 },
+        normal: h.normal || { x: 0, y: 1, z: 0 },
+        solutions: Array.isArray(h.solutions) ? h.solutions : splitSolutions(h.solution || h.answer || h.correctAnswer || ""),
+        note: h.note || ""
+      })).filter((h) => isValidPosition(h.position));
+
+      createHotspotElements();
+      updateCounter();
+    }
+
+    function getProjectNameFromHotspots(text) {
+      try {
+        const data = JSON.parse(text);
+        return data.projectName || null;
+      } catch {
+        return null;
+      }
+    }
+
+    function findZipEntry(zip, path) {
+      if (!path) return null;
+      const direct = zip.file(path);
+      if (direct) return direct;
+      const normalized = path.replace(/^\.\//, "");
+      const normalizedDirect = zip.file(normalized);
+      if (normalizedDirect) return normalizedDirect;
+      const base = path.split("/").pop();
+      return Object.values(zip.files).find((entry) => !entry.dir && entry.name.split("/").pop() === base) || null;
+    }
+
+    function guessMimeType(fileName) {
+      const lower = fileName.toLowerCase();
+      if (lower.endsWith(".glb")) return "model/gltf-binary";
+      if (lower.endsWith(".gltf")) return "model/gltf+json";
+      if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+      if (lower.endsWith(".png")) return "image/png";
+      if (lower.endsWith(".webp")) return "image/webp";
+      return "application/octet-stream";
+    }
+
+    function cleanupObjectUrls() {
+      activeObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+      activeObjectUrls = [];
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(showToast.timeout);
+      showToast.timeout = setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+
+    function clearHotspots() {
+      if (HOTSPOTS.length === 0) return;
+      if (!confirm("Alle Punkte löschen?")) return;
+      HOTSPOTS = [];
+      createHotspotElements();
+      updateCounter();
+      showToast("Alle Punkte gelöscht.");
+    }
+
+    function runSelfTests() {
+      const results = [];
+      const assert = (name, condition) => {
+        results.push({ name, passed: Boolean(condition) });
+        if (!condition) console.error(`Test fehlgeschlagen: ${name}`);
+      };
+
+      assert("THREE wurde geladen", typeof THREE.Scene === "function");
+      assert("OrbitControls wurde geladen", typeof OrbitControls === "function");
+      assert("GLTFLoader wurde geladen", typeof GLTFLoader === "function");
+      assert("OBJLoader wurde geladen", typeof OBJLoader === "function");
+      assert("MTLLoader wurde geladen", typeof MTLLoader === "function");
+      assert("JSZip wurde geladen", typeof JSZip === "function");
+      assert("Platzhaltermodell existiert", currentModel && currentModel.name === "Platzhalter-Würfel");
+      assert("SplitSolutions trennt Varianten", splitSolutions("A; B | C, D").length === 4);
+      assert("Dateiname wird bereinigt", sanitizeFileName("Mein / Projekt: Test") === "Mein-Projekt-Test");
+      assert("Position ist gültig", isValidPosition({ x: 0, y: 1, z: 2 }));
+      assert("Hotspot-Konfig erzeugbar", Array.isArray(buildHotspotsConfig().hotspots));
+      assert("Main Model Priorität GLB", chooseMainModelFile(["a.obj", "b.glb"]) === "b.glb");
+      assert("Drag-Schwellwert ist sinnvoll", CLICK_DRAG_THRESHOLD >= 6);
+
+      const passed = results.filter((r) => r.passed).length;
+      const total = results.length;
+      console.log("Self tests:", results);
+      testPanel.innerHTML = `<strong>Tests:</strong> ${passed}/${total} erfolgreich`;
+      testPanel.classList.add("show");
+      setTimeout(() => testPanel.classList.remove("show"), 3200);
+    }
+
+    renderer.domElement.addEventListener("pointerdown", (event) => {
+      lastPointerDown = { x: event.clientX, y: event.clientY, time: performance.now() };
+      pointerDragDistance = 0;
+      suppressNextClick = false;
+    });
+
+    renderer.domElement.addEventListener("pointermove", (event) => {
+      const dx = event.clientX - lastPointerDown.x;
+      const dy = event.clientY - lastPointerDown.y;
+      pointerDragDistance = Math.max(pointerDragDistance, Math.hypot(dx, dy));
+    });
+
+    renderer.domElement.addEventListener("pointerup", () => {
+      if (pointerDragDistance > CLICK_DRAG_THRESHOLD) {
+        suppressNextClick = true;
+        setTimeout(() => {
+          suppressNextClick = false;
+        }, 0);
+      }
+    });
+
+    renderer.domElement.addEventListener("click", handleCanvasClick);
+
+    modelInput.addEventListener("change", (event) => handleModelInput(event.target.files));
+    projectInput.addEventListener("change", (event) => loadExistingProjectZip(event.target.files?.[0]));
+    addModeBtn.addEventListener("click", () => {
+      addMode = !addMode;
+      addModeBtn.textContent = addMode ? "Punkte setzen: EIN" : "Punkte setzen: AUS";
+      addModeBtn.classList.toggle("teal", addMode);
+      showToast(addMode ? "Punkte setzen aktiviert." : "Punkte setzen deaktiviert. Vorhandene Punkte bleiben bearbeitbar.");
+    });
+    exportBtn.addEventListener("click", exportProjectZip);
+    clearBtn.addEventListener("click", clearHotspots);
+    viewBtn.addEventListener("click", () => currentModel && fitCameraToObject(currentModel));
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      updateHotspotPositions();
+    });
+
+    window.addEventListener("beforeunload", cleanupObjectUrls);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      updateHotspotPositions();
+      renderer.render(scene, camera);
+    }
+
+    setModel(createPlaceholderCube(), false);
+    createHotspotElements();
+    updateCounter();
+    runSelfTests();
+    animate();
+  </script>
+</body>
+</html>
